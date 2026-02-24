@@ -1,4 +1,5 @@
 import { ApiGateway } from './apigateway';
+import { ensureApiGatewayExecutionRoles } from './iam-roles';
 
 
 
@@ -9,11 +10,13 @@ async function deploy() {
     console.log('🚀 Starting Project Deployment...');
     console.log('🌐 Creating API Gateway and endpoints...');
 
+    const roles = await ensureApiGatewayExecutionRoles();
+
     ApiGateway.configureDependencies({
       s3BucketName: process.env['S3_BUCKET_NAME'] || 'kfc-bucket',
       dynamoTableName: process.env['DYNAMODB_TABLE_NAME'] || 'ShipTable',
-      s3RoleArn: process.env['APIGATEWAY_S3_ROLE_ARN'] || 'APIGatewayS3ServiceRole',
-      dynamoRoleArn: process.env['APIGATEWAY_DYNAMODB_ROLE_ARN'] || 'APIGatewayDynamoDBServiceRole',
+      s3RoleArn: roles.s3RoleArn,
+      dynamoRoleArn: roles.dynamoRoleArn,
     });
 
     const apiGateway = await ApiGateway.setupApiGateway();
