@@ -1,5 +1,6 @@
 import {
   APIGatewayClient,
+  CreateApiKeyCommand,
   CreateDeploymentCommand,
   CreateResourceCommand,
   DeleteRestApiCommand,
@@ -9,16 +10,50 @@ import {
   PutMethodCommand,
   CreateRestApiCommand,
 } from '@aws-sdk/client-api-gateway';
-import { ensureTokenAuthorizer } from './authorizer';
 
 const REGION = process.env['AWS_REGION'] || 'eu-west-1';
 const API_NAME = 'shipwrecker-api';
 const STAGE_NAME = 'dev';
+const API_KEY_NAME = process.env['API_GATEWAY_API_KEY_NAME'] || 'shipwrecker-api-key';
 
 const apiGatewayClient = new APIGatewayClient({ region: REGION });
 
+type ApiGatewayDependencies = {
+  s3BucketName: string;
+  dynamoTableName: string;
+  s3RoleArn: string;
+  dynamoRoleArn: string;
+};
+
 class ApiGateway {
-    static async getRootResourceId(restApiId: string): Promise<string> {
+  private static dependencies: ApiGatewayDependencies | null = null;
+
+  static configureDependencies(dependencies: ApiGatewayDependencies): void {
+    ApiGateway.dependencies = dependencies;
+  }
+
+  private static getDependencies(): ApiGatewayDependencies {
+    if (!ApiGateway.dependencies) {
+      throw new Error(
+        'API Gateway dependencies are not configured. Call ApiGateway.configureDependencies(...) before setupApiGateway().'
+      );
+    }
+
+    if (
+      !ApiGateway.dependencies.s3BucketName ||
+      !ApiGateway.dependencies.dynamoTableName ||
+      !ApiGateway.dependencies.s3RoleArn ||
+      !ApiGateway.dependencies.dynamoRoleArn
+    ) {
+      throw new Error(
+        'Missing API Gateway dependencies. Required: s3BucketName, dynamoTableName, s3RoleArn, dynamoRoleArn.'
+      );
+    }
+
+    return ApiGateway.dependencies;
+  }
+
+  static async getRootResourceId(restApiId: string): Promise<string> {
     const resources = await apiGatewayClient.send(
       new GetResourcesCommand({ restApiId })
     );
@@ -29,8 +64,8 @@ class ApiGateway {
     }
 
     return rootResource.id;
-    }
-  
+  }
+
   static async createResource(
     restApiId: string,
     parentId: string,
@@ -51,18 +86,22 @@ class ApiGateway {
     return response.id;
   }
 
-  static async addGetMethodWithMockIntegration(
+  static async addGetMethodWithS3Integration(
     restApiId: string,
-    resourceId: string,
-    authorizerId: string
+    resourceId: string
   ): Promise<void> {
+    const dependencies = ApiGateway.getDependencies();
+
     await apiGatewayClient.send(
       new PutMethodCommand({
         restApiId,
         resourceId,
         httpMethod: 'GET',
-        authorizationType: 'CUSTOM',
-        authorizerId,
+        authorizationType: 'NONE',
+        apiKeyRequired: true,
+        requestParameters: {
+          'method.request.path.key': true,
+        },
       })
     );
 
@@ -71,15 +110,111 @@ class ApiGateway {
         restApiId,
         resourceId,
         httpMethod: 'GET',
-        type: 'MOCK',
-        requestTemplates: {
-          'application/json': '{"statusCode": 200}',
+        type: 'AWS',
+        integrationHttpMethod: 'GET',
+        credentials: dependencies.s3RoleArn,
+        uri: `arn:aws:apigateway:${REGION}:s3:path/{bucket}/{key}`,
+        requestParameters: {
+          'integration.request.path.bucket': `'${dependencies.s3BucketName}'`,
+          'integration.request.path.key': 'method.request.path.key',
         },
       })
     );
   }
 
-  static async setupApiGateway(): Promise<{ restApiId: string; invokeUrl: string }> {
+  static async addGetMethodWithDynamoGetItemIntegration(
+    restApiId: string,
+    resourceId: string
+  ): Promise<void> {
+    const dependencies = ApiGateway.getDependencies();
+
+    await apiGatewayClient.send(
+      new PutMethodCommand({
+        restApiId,
+        resourceId,
+        httpMethod: 'GET',
+        authorizationType: 'NONE',
+        apiKeyRequired: true,
+        requestParameters: {
+          'method.request.path.key': true,
+        },
+      })
+    );
+
+    await apiGatewayClient.send(
+      new PutIntegrationCommand({
+        restApiId,
+        resourceId,
+        httpMethod: 'GET',
+        type: 'AWS',
+        integrationHttpMethod: 'POST',
+        credentials: dependencies.dynamoRoleArn,
+        uri: `arn:aws:apigateway:${REGION}:dynamodb:action/GetItem`,
+        requestTemplates: {
+          'application/json': `{
+  "TableName": "${dependencies.dynamoTableName}",
+  "Key": {
+    "id": {
+      "S": "$input.params('key')"
+    }
+  }
+}`,
+        },
+      })
+    );
+  }
+
+  static async addGetMethodWithDynamoScanIntegration(
+    restApiId: string,
+    resourceId: string
+  ): Promise<void> {
+    const dependencies = ApiGateway.getDependencies();
+
+    await apiGatewayClient.send(
+      new PutMethodCommand({
+        restApiId,
+        resourceId,
+        httpMethod: 'GET',
+        authorizationType: 'NONE',
+        apiKeyRequired: true,
+      })
+    );
+
+    await apiGatewayClient.send(
+      new PutIntegrationCommand({
+        restApiId,
+        resourceId,
+        httpMethod: 'GET',
+        type: 'AWS',
+        integrationHttpMethod: 'POST',
+        credentials: dependencies.dynamoRoleArn,
+        uri: `arn:aws:apigateway:${REGION}:dynamodb:action/Scan`,
+        requestTemplates: {
+          'application/json': `{
+  "TableName": "${dependencies.dynamoTableName}"
+}`,
+        },
+      })
+    );
+  }
+
+  static async createApiToken(): Promise<string> {
+    const response = await apiGatewayClient.send(
+      new CreateApiKeyCommand({
+        name: API_KEY_NAME,
+        enabled: true,
+        generateDistinctId: true,
+      })
+    );
+
+    if (!response.value) {
+      throw new Error('Failed to create API token (API Key).');
+    }
+
+    return response.value;
+  }
+
+  static async setupApiGateway(): Promise<{ restApiId: string; invokeUrl: string; apiToken: string }> {
     const createApiResponse = await apiGatewayClient.send(
       new CreateRestApiCommand({
         name: API_NAME,
@@ -95,7 +230,6 @@ class ApiGateway {
     }
 
     const restApiId = createApiResponse.id;
-  const tokenAuthorizerId = await ensureTokenAuthorizer(restApiId);
     const rootResourceId = await ApiGateway.getRootResourceId(restApiId);
 
     const shipsResourceId = await ApiGateway.createResource(restApiId, rootResourceId, 'ships');
@@ -104,9 +238,9 @@ class ApiGateway {
     const profileResourceId = await ApiGateway.createResource(restApiId, shipsResourceId, 'profile');
     const profileKeyResourceId = await ApiGateway.createResource(restApiId, profileResourceId, '{key}');
 
-    await ApiGateway.addGetMethodWithMockIntegration(restApiId, shipsResourceId, tokenAuthorizerId);
-    await ApiGateway.addGetMethodWithMockIntegration(restApiId, photoKeyResourceId, tokenAuthorizerId);
-    await ApiGateway.addGetMethodWithMockIntegration(restApiId, profileKeyResourceId, tokenAuthorizerId);
+    await ApiGateway.addGetMethodWithDynamoScanIntegration(restApiId, shipsResourceId);
+    await ApiGateway.addGetMethodWithS3Integration(restApiId, photoKeyResourceId);
+    await ApiGateway.addGetMethodWithDynamoGetItemIntegration(restApiId, profileKeyResourceId);
 
     await apiGatewayClient.send(
       new CreateDeploymentCommand({
@@ -116,9 +250,12 @@ class ApiGateway {
       })
     );
 
+    const apiToken = await ApiGateway.createApiToken();
+
     return {
       restApiId,
       invokeUrl: `https://${restApiId}.execute-api.${REGION}.amazonaws.com/${STAGE_NAME}`,
+      apiToken,
     };
   }
 
