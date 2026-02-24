@@ -46,7 +46,7 @@ async function deploy() {
     /* Configure API Gateway dependencies and setup API Gateway */
     ApiGateway.configureDependencies({
       s3BucketName: process.env['S3_BUCKET_NAME'] || 'kfc-bucket',
-      dynamoTableName: process.env['DYNAMODB_TABLE_NAME'] || 'ShipTable',
+      dynamoTableName: process.env['DYNAMODB_TABLE_NAME'] || 'ship_table',
       s3RoleArn: roles.s3RoleArn,
       dynamoRoleArn: roles.dynamoRoleArn,
     });

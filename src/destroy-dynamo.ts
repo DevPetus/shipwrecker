@@ -7,8 +7,8 @@ async function nukeTables() {
     try {
         const listTablesCommand = new ListTablesCommand({});
         const tables = await client.send(listTablesCommand);
-        if (tables) {
-            for (const table in tables) {
+        if (tables.TableNames && tables.TableNames.length > 0) {
+            for (const table of tables.TableNames) {
                 deleteTable(table);
             }
         } else { console.log('No tables found to delete.'); }

@@ -6,7 +6,9 @@ import {
   DeleteRestApiCommand,
   GetRestApisCommand,
   GetResourcesCommand,
+  PutIntegrationResponseCommand,
   PutIntegrationCommand,
+  PutMethodResponseCommand,
   PutMethodCommand,
   CreateRestApiCommand,
 } from '@aws-sdk/client-api-gateway';
@@ -120,6 +122,24 @@ class ApiGateway {
         },
       })
     );
+
+    await apiGatewayClient.send(
+      new PutMethodResponseCommand({
+        restApiId,
+        resourceId,
+        httpMethod: 'GET',
+        statusCode: '200',
+      })
+    );
+
+    await apiGatewayClient.send(
+      new PutIntegrationResponseCommand({
+        restApiId,
+        resourceId,
+        httpMethod: 'GET',
+        statusCode: '200',
+      })
+    );
   }
 
   static async addGetMethodWithDynamoGetItemIntegration(
@@ -162,6 +182,24 @@ class ApiGateway {
         },
       })
     );
+
+    await apiGatewayClient.send(
+      new PutMethodResponseCommand({
+        restApiId,
+        resourceId,
+        httpMethod: 'GET',
+        statusCode: '200',
+      })
+    );
+
+    await apiGatewayClient.send(
+      new PutIntegrationResponseCommand({
+        restApiId,
+        resourceId,
+        httpMethod: 'GET',
+        statusCode: '200',
+      })
+    );
   }
 
   static async addGetMethodWithDynamoScanIntegration(
@@ -193,6 +231,78 @@ class ApiGateway {
           'application/json': `{
   "TableName": "${dependencies.dynamoTableName}"
 }`,
+        },
+      })
+    );
+
+    await apiGatewayClient.send(
+      new PutMethodResponseCommand({
+        restApiId,
+        resourceId,
+        httpMethod: 'GET',
+        statusCode: '200',
+      })
+    );
+
+    await apiGatewayClient.send(
+      new PutIntegrationResponseCommand({
+        restApiId,
+        resourceId,
+        httpMethod: 'GET',
+        statusCode: '200',
+      })
+    );
+  }
+
+  static async addCorsOptionsMethod(
+    restApiId: string,
+    resourceId: string
+  ): Promise<void> {
+    await apiGatewayClient.send(
+      new PutMethodCommand({
+        restApiId,
+        resourceId,
+        httpMethod: 'OPTIONS',
+        authorizationType: 'NONE',
+      })
+    );
+
+    await apiGatewayClient.send(
+      new PutIntegrationCommand({
+        restApiId,
+        resourceId,
+        httpMethod: 'OPTIONS',
+        type: 'MOCK',
+        requestTemplates: {
+          'application/json': '{"statusCode": 200}',
+        },
+      })
+    );
+
+    await apiGatewayClient.send(
+      new PutMethodResponseCommand({
+        restApiId,
+        resourceId,
+        httpMethod: 'OPTIONS',
+        statusCode: '200',
+        responseParameters: {
+          'method.response.header.Access-Control-Allow-Headers': true,
+          'method.response.header.Access-Control-Allow-Methods': true,
+          'method.response.header.Access-Control-Allow-Origin': true,
+        },
+      })
+    );
+
+    await apiGatewayClient.send(
+      new PutIntegrationResponseCommand({
+        restApiId,
+        resourceId,
+        httpMethod: 'OPTIONS',
+        statusCode: '200',
+        responseParameters: {
+          'method.response.header.Access-Control-Allow-Headers': "'Content-Type,Authorization,X-Api-Key'",
+          'method.response.header.Access-Control-Allow-Methods': "'GET,OPTIONS'",
+          'method.response.header.Access-Control-Allow-Origin': "'*'",
         },
       })
     );
@@ -241,6 +351,10 @@ class ApiGateway {
     await ApiGateway.addGetMethodWithDynamoScanIntegration(restApiId, shipsResourceId);
     await ApiGateway.addGetMethodWithS3Integration(restApiId, photoKeyResourceId);
     await ApiGateway.addGetMethodWithDynamoGetItemIntegration(restApiId, profileKeyResourceId);
+
+    await ApiGateway.addCorsOptionsMethod(restApiId, shipsResourceId);
+    await ApiGateway.addCorsOptionsMethod(restApiId, photoKeyResourceId);
+    await ApiGateway.addCorsOptionsMethod(restApiId, profileKeyResourceId);
 
     await apiGatewayClient.send(
       new CreateDeploymentCommand({
