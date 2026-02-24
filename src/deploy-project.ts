@@ -1,5 +1,6 @@
 import { createTable, insertShipAttributes, showTables } from './deploy-dynamo';
 import { ApiGateway } from './apigateway';
+import { ensureApiGatewayExecutionRoles } from './iam-roles';
 import { DescribeTableCommand, DynamoDBClient } from "@aws-sdk/client-dynamodb";
 
 /* 
@@ -24,12 +25,16 @@ async function deploy() {
     /* Waiting for table to be active before proceeding */
     let tableActive = false;
     while (!tableActive) {
-      const describeTableCommand = new DescribeTableCommand({ TableName: tableName });
-      const describeResponse = await client.send(describeTableCommand);
-      if (describeResponse.Table && describeResponse.Table.TableStatus === "ACTIVE") {
-        tableActive = true;
-      } else {
-        await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait 2 seconds
+      try {
+        const describeTableCommand = new DescribeTableCommand({ TableName: tableName });
+        const describeResponse = await client.send(describeTableCommand);
+        if (describeResponse.Table && describeResponse.Table.TableStatus === "ACTIVE") {
+          tableActive = true;
+        } else {
+          await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait 2 seconds
+        }
+      } catch (error) { 
+        console.log('❌ Looking for table:', tableName, ' - not found yet, retrying...');
       }
     }
 
@@ -40,12 +45,14 @@ async function deploy() {
 
     console.log('🌐 Creating API Gateway and endpoints...');
 
+    const roles = await ensureApiGatewayExecutionRoles();
+
     /* Configure API Gateway dependencies and setup API Gateway */
     ApiGateway.configureDependencies({
       s3BucketName: process.env['S3_BUCKET_NAME'] || 'kfc-bucket',
-      dynamoTableName: process.env['DYNAMODB_TABLE_NAME'] || 'ShipTable',
-      s3RoleArn: process.env['APIGATEWAY_S3_ROLE_ARN'] || 'APIGatewayS3ServiceRole',
-      dynamoRoleArn: process.env['APIGATEWAY_DYNAMODB_ROLE_ARN'] || 'APIGatewayDynamoDBServiceRole',
+      dynamoTableName: process.env['DYNAMODB_TABLE_NAME'] || 'ship_table',
+      s3RoleArn: roles.s3RoleArn,
+      dynamoRoleArn: roles.dynamoRoleArn,
     });
 
     /* Setup API Gateway and retrieve details */
