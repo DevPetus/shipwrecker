@@ -1,9 +1,9 @@
 import { CreateTableCommand, DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { PutCommand, GetCommand, DeleteCommand, DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
+import { PutCommand } from "@aws-sdk/lib-dynamodb";
 import * as ships from '../data/ships.json';
 
 const client = new DynamoDBClient({ region: "eu-west-1" });
-const docClient = DynamoDBDocumentClient.from(client);
+// const docClient = DynamoDBDocumentClient.from(client);
 
 async function createTable(tableName: string) {
     const createTableCommand = new CreateTableCommand({
@@ -32,27 +32,40 @@ async function createTable(tableName: string) {
 }
 
 async function insertShipAttributes(tableName: string) {
-    for (const ship of ships) {
-        try {
-            const command = new PutCommand({
-                TableName: tableName,
-                Item: ship
-            });
-            await client.send(command);
-            console.log(`✅ Inserted item ${ship.nom.S}`);
-        } catch (error) {
-            console.error(`❌ Error inserting item ${ship.nom.S}:`, error);
+    if (ships) {
+        for (const ship of ships) {
+            try {
+                const command = new PutCommand({
+                    TableName: tableName,
+                    Item: ship
+                });
+                await client.send(command);
+                console.log(`✅ Inserted item ${ship.nom.S}`);
+            } catch (error) {
+                console.error(`❌ Error inserting item ${ship.nom.S}:`, error);
+            }
         }
     }
+    else { console.log('No ship data found to insert.'); }
 }
 
-async function deleteTable(tableName: string) {
-    try {
-        const { DeleteTableCommand } = await import("@aws-sdk/client-dynamodb");
-        const deleteTableCommand = new DeleteTableCommand({ TableName: tableName });
-        await client.send(deleteTableCommand);
-        console.log('✅ Table deleted');
-    } catch (error) {
-        console.error('❌ Error deleting table:', error);
-    }
-}
+// async function showTables() {
+//     try {
+//         const { ListTablesCommand } = await import("@aws-sdk/client-dynamodb");
+//         const listTablesCommand = new ListTablesCommand({});
+//         const table = await client.send(listTablesCommand);
+//         console.log('📋 Tables:', tables.TableNames);
+//         for (const table of tables.TableNames) {
+//             console.log("id :", table.S.id");
+//             console.log("nom :", nom);
+//             console.log("type :", type);
+//             console.log("pavillon :", pavillon);
+//             console.log("taille :", taille);
+//             console.log("nombre_marins :", nombre_marins);
+//         }
+//     } catch (error) {
+//         console.error('❌ Error listing tables:', error);
+//     }
+// }
+
+export { createTable, insertShipAttributes };

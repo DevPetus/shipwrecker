@@ -1,4 +1,5 @@
 import { ApiGateway } from './apigateway';
+import { nukeTables } from './destroy-dynamo';
 
 // Main function to execute destructive operation
 async function main() {
@@ -7,6 +8,7 @@ async function main() {
 
     await ApiGateway.destroyApiGateway();
 
+    await nukeTables();
     console.log('Project deleted...');
   } catch (error) {
     console.error('❌ Error:', error);
@@ -17,4 +19,4 @@ async function main() {
 main();
 
 // Export to make this a module and avoid global scope conflicts
-export {};
+export { };
