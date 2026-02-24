@@ -1,4 +1,4 @@
-import { createTable, insertShipAttributes } from './deploy-dynamo';
+import { createTable, insertShipAttributes, showTables } from './deploy-dynamo';
 import { ApiGateway } from './apigateway';
 import { DescribeTableCommand, DynamoDBClient } from "@aws-sdk/client-dynamodb";
 
@@ -57,7 +57,7 @@ async function deploy() {
     console.log(`🔗 Invoke URL: ${apiGateway.invokeUrl}`);
     console.log('Project deployed...');
 
-
+    showTables();
 
   } catch (error) {
     console.error('❌ Error:', error);
