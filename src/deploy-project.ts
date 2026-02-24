@@ -1,6 +1,10 @@
 import { createTable, insertShipAttributes } from './deploy-dynamo';
 import { ApiGateway } from './apigateway';
 import { ensureApiGatewayExecutionRoles } from './iam-roles';
+import { DescribeTableCommand, DynamoDBClient } from "@aws-sdk/client-dynamodb";
+
+
+const client = new DynamoDBClient({ region: "eu-west-1" });
 
 
 async function deploy() {
@@ -12,6 +16,17 @@ async function deploy() {
     console.log('🔋 Creating DynamoDB...');
 
     createTable(tableName);
+
+    let tableActive = false;
+    while (!tableActive) {
+      const describeTableCommand = new DescribeTableCommand({ TableName: tableName });
+      const describeResponse = await client.send(describeTableCommand);
+      if (describeResponse.Table && describeResponse.Table.TableStatus === "ACTIVE") {
+        tableActive = true;
+      } else {
+        await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait 2 seconds
+      }
+    }
 
     console.log('📦 Inserting Ship Attributes...');
 
