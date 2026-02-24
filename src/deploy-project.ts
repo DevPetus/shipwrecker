@@ -25,12 +25,16 @@ async function deploy() {
     /* Waiting for table to be active before proceeding */
     let tableActive = false;
     while (!tableActive) {
-      const describeTableCommand = new DescribeTableCommand({ TableName: tableName });
-      const describeResponse = await client.send(describeTableCommand);
-      if (describeResponse.Table && describeResponse.Table.TableStatus === "ACTIVE") {
-        tableActive = true;
-      } else {
-        await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait 2 seconds
+      try {
+        const describeTableCommand = new DescribeTableCommand({ TableName: tableName });
+        const describeResponse = await client.send(describeTableCommand);
+        if (describeResponse.Table && describeResponse.Table.TableStatus === "ACTIVE") {
+          tableActive = true;
+        } else {
+          await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait 2 seconds
+        }
+      } catch (error) { 
+        console.log('❌ Looking for table:', tableName, ' - not found yet, retrying...');
       }
     }
 

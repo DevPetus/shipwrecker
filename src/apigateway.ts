@@ -129,6 +129,9 @@ class ApiGateway {
         resourceId,
         httpMethod: 'GET',
         statusCode: '200',
+        responseParameters: {
+          'method.response.header.Access-Control-Allow-Origin': true,
+        },
       })
     );
 
@@ -138,6 +141,9 @@ class ApiGateway {
         resourceId,
         httpMethod: 'GET',
         statusCode: '200',
+        responseParameters: {
+          'method.response.header.Access-Control-Allow-Origin': "'*'",
+        },
       })
     );
   }
@@ -189,6 +195,9 @@ class ApiGateway {
         resourceId,
         httpMethod: 'GET',
         statusCode: '200',
+        responseParameters: {
+          'method.response.header.Access-Control-Allow-Origin': true,
+        },
       })
     );
 
@@ -198,6 +207,9 @@ class ApiGateway {
         resourceId,
         httpMethod: 'GET',
         statusCode: '200',
+        responseParameters: {
+          'method.response.header.Access-Control-Allow-Origin': "'*'",
+        },
       })
     );
   }
@@ -241,6 +253,9 @@ class ApiGateway {
         resourceId,
         httpMethod: 'GET',
         statusCode: '200',
+        responseParameters: {
+          'method.response.header.Access-Control-Allow-Origin': true,
+        },
       })
     );
 
@@ -250,6 +265,9 @@ class ApiGateway {
         resourceId,
         httpMethod: 'GET',
         statusCode: '200',
+        responseParameters: {
+          'method.response.header.Access-Control-Allow-Origin': "'*'",
+        },
       })
     );
   }
@@ -300,7 +318,7 @@ class ApiGateway {
         httpMethod: 'OPTIONS',
         statusCode: '200',
         responseParameters: {
-          'method.response.header.Access-Control-Allow-Headers': "'Content-Type,Authorization,X-Api-Key'",
+          'method.response.header.Access-Control-Allow-Headers': "'*'",
           'method.response.header.Access-Control-Allow-Methods': "'GET,OPTIONS'",
           'method.response.header.Access-Control-Allow-Origin': "'*'",
         },
