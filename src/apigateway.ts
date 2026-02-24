@@ -6,9 +6,7 @@ import {
   DeleteRestApiCommand,
   GetRestApisCommand,
   GetResourcesCommand,
-  PutIntegrationResponseCommand,
   PutIntegrationCommand,
-  PutMethodResponseCommand,
   PutMethodCommand,
   CreateRestApiCommand,
 } from '@aws-sdk/client-api-gateway';
@@ -20,7 +18,41 @@ const API_KEY_NAME = process.env['API_GATEWAY_API_KEY_NAME'] || 'shipwrecker-api
 
 const apiGatewayClient = new APIGatewayClient({ region: REGION });
 
+type ApiGatewayDependencies = {
+  s3BucketName: string;
+  dynamoTableName: string;
+  s3RoleArn: string;
+  dynamoRoleArn: string;
+};
+
 class ApiGateway {
+  private static dependencies: ApiGatewayDependencies | null = null;
+
+  static configureDependencies(dependencies: ApiGatewayDependencies): void {
+    ApiGateway.dependencies = dependencies;
+  }
+
+  private static getDependencies(): ApiGatewayDependencies {
+    if (!ApiGateway.dependencies) {
+      throw new Error(
+        'API Gateway dependencies are not configured. Call ApiGateway.configureDependencies(...) before setupApiGateway().'
+      );
+    }
+
+    if (
+      !ApiGateway.dependencies.s3BucketName ||
+      !ApiGateway.dependencies.dynamoTableName ||
+      !ApiGateway.dependencies.s3RoleArn ||
+      !ApiGateway.dependencies.dynamoRoleArn
+    ) {
+      throw new Error(
+        'Missing API Gateway dependencies. Required: s3BucketName, dynamoTableName, s3RoleArn, dynamoRoleArn.'
+      );
+    }
+
+    return ApiGateway.dependencies;
+  }
+
   static async getRootResourceId(restApiId: string): Promise<string> {
     const resources = await apiGatewayClient.send(
       new GetResourcesCommand({ restApiId })
@@ -54,16 +86,22 @@ class ApiGateway {
     return response.id;
   }
 
-  static async addGetMethodWithMockIntegration(
+  static async addGetMethodWithS3Integration(
     restApiId: string,
     resourceId: string
   ): Promise<void> {
+    const dependencies = ApiGateway.getDependencies();
+
     await apiGatewayClient.send(
       new PutMethodCommand({
         restApiId,
         resourceId,
         httpMethod: 'GET',
         authorizationType: 'NONE',
+        apiKeyRequired: true,
+        requestParameters: {
+          'method.request.path.key': true,
+        },
       })
     );
 
@@ -72,36 +110,34 @@ class ApiGateway {
         restApiId,
         resourceId,
         httpMethod: 'GET',
-        type: 'MOCK',
-        requestTemplates: {
-          'application/json': '{"statusCode": 200}',
-        },
-      })
-    );
-
-    await apiGatewayClient.send(
-      new PutMethodResponseCommand({
-        restApiId,
-        resourceId,
-        httpMethod: 'GET',
-        statusCode: '200',
-        responseModels: {
-          'application/json': 'Empty',
+        type: 'AWS',
+        integrationHttpMethod: 'GET',
+        credentials: dependencies.s3RoleArn,
+        uri: `arn:aws:apigateway:${REGION}:s3:path/{bucket}/{key}`,
+        requestParameters: {
+          'integration.request.path.bucket': `'${dependencies.s3BucketName}'`,
+          'integration.request.path.key': 'method.request.path.key',
         },
       })
     );
   }
 
-  static async addCorsOptionsMethod(
+  static async addGetMethodWithDynamoGetItemIntegration(
     restApiId: string,
     resourceId: string
   ): Promise<void> {
+    const dependencies = ApiGateway.getDependencies();
+
     await apiGatewayClient.send(
       new PutMethodCommand({
         restApiId,
         resourceId,
-        httpMethod: 'OPTIONS',
+        httpMethod: 'GET',
         authorizationType: 'NONE',
+        apiKeyRequired: true,
+        requestParameters: {
+          'method.request.path.key': true,
+        },
       })
     );
 
@@ -109,41 +145,54 @@ class ApiGateway {
       new PutIntegrationCommand({
         restApiId,
         resourceId,
-        httpMethod: 'OPTIONS',
-        type: 'MOCK',
+        httpMethod: 'GET',
+        type: 'AWS',
+        integrationHttpMethod: 'POST',
+        credentials: dependencies.dynamoRoleArn,
+        uri: `arn:aws:apigateway:${REGION}:dynamodb:action/GetItem`,
         requestTemplates: {
-          'application/json': '{"statusCode": 200}',
+          'application/json': `{
+  "TableName": "${dependencies.dynamoTableName}",
+  "Key": {
+    "id": {
+      "S": "$input.params('key')"
+    }
+  }
+}`,
         },
+      })
+    );
+  }
+
+  static async addGetMethodWithDynamoScanIntegration(
+    restApiId: string,
+    resourceId: string
+  ): Promise<void> {
+    const dependencies = ApiGateway.getDependencies();
+
+    await apiGatewayClient.send(
+      new PutMethodCommand({
+        restApiId,
+        resourceId,
+        httpMethod: 'GET',
+        authorizationType: 'NONE',
+        apiKeyRequired: true,
       })
     );
 
     await apiGatewayClient.send(
-      new PutMethodResponseCommand({
+      new PutIntegrationCommand({
         restApiId,
         resourceId,
-        httpMethod: 'OPTIONS',
-        statusCode: '200',
-        responseParameters: {
-          'method.response.header.Access-Control-Allow-Headers': true,
-          'method.response.header.Access-Control-Allow-Methods': true,
-          'method.response.header.Access-Control-Allow-Origin': true,
-        },
-        responseModels: {
-          'application/json': 'Empty',
-        },
-      })
-    );
-
-    await apiGatewayClient.send(
-      new PutIntegrationResponseCommand({
-        restApiId,
-        resourceId,
-        httpMethod: 'OPTIONS',
-        statusCode: '200',
-        responseParameters: {
-          'method.response.header.Access-Control-Allow-Headers': "'Content-Type,Authorization'",
-          'method.response.header.Access-Control-Allow-Methods': "'GET,OPTIONS'",
-          'method.response.header.Access-Control-Allow-Origin': "'*'",
+        httpMethod: 'GET',
+        type: 'AWS',
+        integrationHttpMethod: 'POST',
+        credentials: dependencies.dynamoRoleArn,
+        uri: `arn:aws:apigateway:${REGION}:dynamodb:action/Scan`,
+        requestTemplates: {
+          'application/json': `{
+  "TableName": "${dependencies.dynamoTableName}"
+}`,
         },
       })
     );
@@ -189,13 +238,9 @@ class ApiGateway {
     const profileResourceId = await ApiGateway.createResource(restApiId, shipsResourceId, 'profile');
     const profileKeyResourceId = await ApiGateway.createResource(restApiId, profileResourceId, '{key}');
 
-    await ApiGateway.addGetMethodWithMockIntegration(restApiId, shipsResourceId);
-    await ApiGateway.addGetMethodWithMockIntegration(restApiId, photoKeyResourceId);
-    await ApiGateway.addGetMethodWithMockIntegration(restApiId, profileKeyResourceId);
-
-    await ApiGateway.addCorsOptionsMethod(restApiId, shipsResourceId);
-    await ApiGateway.addCorsOptionsMethod(restApiId, photoKeyResourceId);
-    await ApiGateway.addCorsOptionsMethod(restApiId, profileKeyResourceId);
+    await ApiGateway.addGetMethodWithDynamoScanIntegration(restApiId, shipsResourceId);
+    await ApiGateway.addGetMethodWithS3Integration(restApiId, photoKeyResourceId);
+    await ApiGateway.addGetMethodWithDynamoGetItemIntegration(restApiId, profileKeyResourceId);
 
     await apiGatewayClient.send(
       new CreateDeploymentCommand({
