@@ -1,6 +1,6 @@
 import { CreateTableCommand, DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { PutCommand, GetCommand, DeleteCommand, DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
-import { ships } from '../data/ships.json';
+import * as ships from '../data/ships.json';
 
 const client = new DynamoDBClient({ region: "eu-west-1" });
 const docClient = DynamoDBDocumentClient.from(client);
@@ -31,19 +31,28 @@ async function createTable(tableName: string) {
     }
 }
 
-async function insertCoffeeItems() {
-    const items = ;
-
-    for (const item of items) {
+async function insertShipAttributes(tableName: string) {
+    for (const ship of ships) {
         try {
             const command = new PutCommand({
                 TableName: tableName,
-                Item: item
+                Item: ship
             });
             await client.send(command);
-            console.log(`✅ Inserted item ${item.name}`);
+            console.log(`✅ Inserted item ${ship.nom.S}`);
         } catch (error) {
-            console.error(`❌ Error inserting item ${item.name}:`, error);
+            console.error(`❌ Error inserting item ${ship.nom.S}:`, error);
         }
+    }
+}
+
+async function deleteTable(tableName: string) {
+    try {
+        const { DeleteTableCommand } = await import("@aws-sdk/client-dynamodb");
+        const deleteTableCommand = new DeleteTableCommand({ TableName: tableName });
+        await client.send(deleteTableCommand);
+        console.log('✅ Table deleted');
+    } catch (error) {
+        console.error('❌ Error deleting table:', error);
     }
 }
