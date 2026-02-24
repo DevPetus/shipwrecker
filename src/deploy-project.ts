@@ -2,6 +2,7 @@ import { createTable, insertShipAttributes, showTables } from './deploy-dynamo';
 import { ApiGateway } from './apigateway';
 import { ensureApiGatewayExecutionRoles } from './iam-roles';
 import { DescribeTableCommand, DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { S3 } from './s3';
 
 /* 
     Global for client
@@ -64,7 +65,15 @@ async function deploy() {
     console.log(`🔗 Invoke URL: ${apiGateway.invokeUrl}`);
     console.log('Project deployed...');
 
+<<<<<<< HEAD
     showTables();
+=======
+    const s3 = new S3();
+    s3.createBucket("test");
+
+    s3.createBucket("bucket");
+    s3.deleteBucket();
+>>>>>>> 3dd81ec3f9e1514e7d78299cc4b37c3ee0534b7b
 
   } catch (error) {
     console.error('❌ Error:', error);

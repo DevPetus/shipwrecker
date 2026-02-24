@@ -21,7 +21,7 @@ class S3 {
 
     async createBucket(name : string) {
         this.name = name;
-        
+
         const input : CreateBucketCommandInput = {
             Bucket: name
         };
