@@ -2,7 +2,9 @@
   "compilerOptions": {
     "target": "ES2020",
     "module": "commonjs",
-    "lib": ["ES2020"],
+    "lib": [
+      "ES2020"
+    ],
     "outDir": "./dist",
     "rootDir": "./",
     "strict": true,
@@ -28,13 +30,25 @@
     "rootDir": "./src",
     "baseUrl": "./src",
     "paths": {
-      "@/*": ["./*"]
+      "@/*": [
+        "./*"
+      ]
     }
   },
-  "include": ["src/**/*", "labs/**/*", "shared/**/*", "*.ts", "src/.ts"],
-  "exclude": ["node_modules", "dist", "__tests__","node_modules",
+  "include": [
+    "src/**/*",
+    "labs/**/*",
+    "shared/**/*",
+    "*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "__tests__",
+    "node_modules",
     "dist",
     "**/*.test.ts",
     "**/*.spec.ts",
-    "**/solutions/**"]
+    "**/solutions/**"
+  ]
 }
