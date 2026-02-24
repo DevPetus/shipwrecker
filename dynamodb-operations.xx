@@ -1,0 +1,125 @@
+// Import the DynamoDB client and commands
+import { CreateTableCommand, DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { PutCommand, GetCommand, DeleteCommand, DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
+
+// Create DynamoDB client instance
+const client = new DynamoDBClient({ region: "eu-west-1" });
+const docClient = DynamoDBDocumentClient.from(client);
+
+// Define the table name with a unique suffix
+const tableName = `CoffeeTable-${Date.now()}`;
+
+// Function to create the DynamoDB table
+async function createTable() {
+  const createTableCommand = new CreateTableCommand({
+    TableName: tableName,
+    AttributeDefinitions: [
+      {
+        AttributeName: "id",
+        AttributeType: "S",
+      },
+    ],
+    KeySchema: [
+      {
+        AttributeName: "id",
+        KeyType: "HASH",
+      },
+    ],
+    BillingMode: "PAY_PER_REQUEST",
+  });
+
+  try {
+    const response = await client.send(createTableCommand);
+    console.log('✅ Table created:', response.TableDescription?.TableName);
+  } catch (error) {
+    console.error('❌ Error creating table:', error);
+  }
+}
+
+// Function to insert coffee items into the table
+async function insertCoffeeItems() {
+  const items = [
+    { id: "1", name: "Cappuccino", price: 4.50 },
+    { id: "2", name: "Latte", price: 5.00 },
+    { id: "3", name: "Americano", price: 3.50 }
+  ];
+
+  for (const item of items) {
+    try {
+      const command = new PutCommand({
+        TableName: tableName,
+        Item: item
+      });
+      await client.send(command);
+      console.log(`✅ Inserted item ${item.name}`);
+    } catch (error) {
+      console.error(`❌ Error inserting item ${item.name}:`, error);
+    }
+  }
+}
+
+// Main function to execute all operations
+async function main() {
+  try {
+    console.log('🚀 Starting DynamoDB operations...');
+
+    // Create table
+    await createTable();
+
+    // Wait for table to become ACTIVE
+    const { DescribeTableCommand } = await import("@aws-sdk/client-dynamodb");
+    let tableActive = false;
+    while (!tableActive) {
+      const describeTableCommand = new DescribeTableCommand({ TableName: tableName });
+      const describeResponse = await client.send(describeTableCommand);
+      if (describeResponse.Table && describeResponse.Table.TableStatus === "ACTIVE") {
+        tableActive = true;
+      } else {
+        await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait 2 seconds
+      }
+    }
+
+    // Insert 3 Starbucks coffee items
+    await insertCoffeeItems();
+
+    // Read and display one item (example: id = "1")
+    const getCommand = new GetCommand({
+      TableName: tableName,
+      Key: { id: "1" },
+    });
+    const response = await docClient.send(getCommand);
+    console.log('📦 Get item response:', response);
+
+    // Delete one item
+    try {
+      const deleteCommand = new DeleteCommand({
+        TableName: tableName,
+        Key: { id: "2" },
+      });
+      await docClient.send(deleteCommand);
+      console.log('✅ Deleted item with id 2');
+    } catch (error) {
+      console.error('❌ Error deleting item:', error);
+    }
+
+    // Clean up: delete the table
+    try {
+      const { DeleteTableCommand } = await import("@aws-sdk/client-dynamodb");
+      const deleteTableCommand = new DeleteTableCommand({ TableName: tableName });
+      await client.send(deleteTableCommand);
+      console.log('✅ Table deleted');
+    } catch (error) {
+      console.error('❌ Error deleting table:', error);
+    }
+
+    console.log('End of the execution...');
+  } catch (error) {
+    console.error('❌ Error:', error);
+  }
+}
+
+// Execute the main function
+main();
+
+// Export to make this a module and avoid global scope conflicts
+export { };
