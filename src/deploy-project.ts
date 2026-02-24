@@ -3,20 +3,26 @@ import { ApiGateway } from './apigateway';
 import { ensureApiGatewayExecutionRoles } from './iam-roles';
 import { DescribeTableCommand, DynamoDBClient } from "@aws-sdk/client-dynamodb";
 
-
+/* 
+    Global for client
+    WARNING : CLIENT REGION HARDCODED, TO BE PARAMETERIZED IN THE FUTURE
+*/
 const client = new DynamoDBClient({ region: "eu-west-1" });
 
+/* Global for table name */
+const tableName: string = `ship_table`;
 
+/* Main function to execute deployment */
 async function deploy() {
   try {
     console.log('🚀 Starting Project Deployment...');
 
-    const tableName: string = `ShipTable`;
-
     console.log('🔋 Creating DynamoDB...');
 
+    /* Create the DynamoDB table */
     createTable(tableName);
 
+    /* Waiting for table to be active before proceeding */
     let tableActive = false;
     while (!tableActive) {
       const describeTableCommand = new DescribeTableCommand({ TableName: tableName });
@@ -30,12 +36,14 @@ async function deploy() {
 
     console.log('📦 Inserting Ship Attributes...');
 
+    /* Insert ship attributes into the table */
     insertShipAttributes(tableName);
 
     console.log('🌐 Creating API Gateway and endpoints...');
 
     const roles = await ensureApiGatewayExecutionRoles();
 
+    /* Configure API Gateway dependencies and setup API Gateway */
     ApiGateway.configureDependencies({
       s3BucketName: process.env['S3_BUCKET_NAME'] || 'kfc-bucket',
       dynamoTableName: process.env['DYNAMODB_TABLE_NAME'] || 'ShipTable',
@@ -43,6 +51,7 @@ async function deploy() {
       dynamoRoleArn: roles.dynamoRoleArn,
     });
 
+    /* Setup API Gateway and retrieve details */
     const apiGateway = await ApiGateway.setupApiGateway();
 
     console.log('✅ API Gateway setup complete.');
