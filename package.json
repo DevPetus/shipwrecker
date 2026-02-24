@@ -6,7 +6,7 @@
   "scripts": {
     "build": "tsc",
     "clean": "rm -rf dist",
-    "start": "npm run build && node dist/main.js",
+    "deploy": "npm run build && node dist/deploy-project.js",
     "dev": "ts-node src/main.ts",
     "test": "jest",
     "test:watch": "jest --watch",
