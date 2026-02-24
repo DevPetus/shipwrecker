@@ -32,8 +32,9 @@ async function createTable(tableName: string) {
 }
 
 async function insertShipAttributes(tableName: string) {
-    if (ships) {
-        for (const ship of ships) {
+    const shipArray = Array.isArray((ships as any).default) ? (ships as any).default : ships;
+    if (shipArray) {
+        for (const ship of shipArray) {
             try {
                 const command = new PutCommand({
                     TableName: tableName,
