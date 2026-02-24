@@ -31,7 +31,7 @@
       "@/*": ["./*"]
     }
   },
-  "include": ["src/**/*", "labs/**/*", "shared/**/*", "*.ts"],
+  "include": ["src/**/*", "labs/**/*", "shared/**/*", "*.ts", "src/.ts"],
   "exclude": ["node_modules", "dist", "__tests__","node_modules",
     "dist",
     "**/*.test.ts",
