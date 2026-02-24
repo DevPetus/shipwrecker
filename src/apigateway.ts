@@ -2,11 +2,14 @@ import {
   APIGatewayClient,
   CreateDeploymentCommand,
   CreateResourceCommand,
+  DeleteRestApiCommand,
+  GetRestApisCommand,
   GetResourcesCommand,
   PutIntegrationCommand,
   PutMethodCommand,
   CreateRestApiCommand,
 } from '@aws-sdk/client-api-gateway';
+import { ensureTokenAuthorizer } from './authorizer';
 
 const REGION = process.env['AWS_REGION'] || 'eu-west-1';
 const API_NAME = 'shipwrecker-api';
@@ -50,14 +53,16 @@ class ApiGateway {
 
   static async addGetMethodWithMockIntegration(
     restApiId: string,
-    resourceId: string
+    resourceId: string,
+    authorizerId: string
   ): Promise<void> {
     await apiGatewayClient.send(
       new PutMethodCommand({
         restApiId,
         resourceId,
         httpMethod: 'GET',
-        authorizationType: 'NONE',
+        authorizationType: 'CUSTOM',
+        authorizerId,
       })
     );
 
@@ -90,6 +95,7 @@ class ApiGateway {
     }
 
     const restApiId = createApiResponse.id;
+  const tokenAuthorizerId = await ensureTokenAuthorizer(restApiId);
     const rootResourceId = await ApiGateway.getRootResourceId(restApiId);
 
     const shipsResourceId = await ApiGateway.createResource(restApiId, rootResourceId, 'ships');
@@ -98,9 +104,9 @@ class ApiGateway {
     const profileResourceId = await ApiGateway.createResource(restApiId, shipsResourceId, 'profile');
     const profileKeyResourceId = await ApiGateway.createResource(restApiId, profileResourceId, '{key}');
 
-    await ApiGateway.addGetMethodWithMockIntegration(restApiId, shipsResourceId);
-    await ApiGateway.addGetMethodWithMockIntegration(restApiId, photoKeyResourceId);
-    await ApiGateway.addGetMethodWithMockIntegration(restApiId, profileKeyResourceId);
+    await ApiGateway.addGetMethodWithMockIntegration(restApiId, shipsResourceId, tokenAuthorizerId);
+    await ApiGateway.addGetMethodWithMockIntegration(restApiId, photoKeyResourceId, tokenAuthorizerId);
+    await ApiGateway.addGetMethodWithMockIntegration(restApiId, profileKeyResourceId, tokenAuthorizerId);
 
     await apiGatewayClient.send(
       new CreateDeploymentCommand({
@@ -114,6 +120,28 @@ class ApiGateway {
       restApiId,
       invokeUrl: `https://${restApiId}.execute-api.${REGION}.amazonaws.com/${STAGE_NAME}`,
     };
+  }
+
+  static async destroyApiGateway(): Promise<void> {
+    const apis = await apiGatewayClient.send(
+      new GetRestApisCommand({
+        limit: 500,
+      })
+    );
+
+    const matchingApis = apis.items?.filter((api) => api.name === API_NAME) || [];
+
+    for (const api of matchingApis) {
+      if (!api.id) {
+        continue;
+      }
+
+      await apiGatewayClient.send(
+        new DeleteRestApiCommand({
+          restApiId: api.id,
+        })
+      );
+    }
   }
 
 }

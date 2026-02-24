@@ -1,9 +1,11 @@
+import { ApiGateway } from './apigateway';
+
 // Main function to execute destructive operation
 async function main() {
   try {
     console.log('🚀 Starting Project Deletion...');
 
-    // Delete all ressources
+    await ApiGateway.destroyApiGateway();
 
     console.log('Project deleted...');
   } catch (error) {

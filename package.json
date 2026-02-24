@@ -7,6 +7,7 @@
     "build": "tsc",
     "clean": "rm -rf dist",
     "deploy": "npm run build && node dist/deploy-project.js",
+    "destroy": "npm run build && node dist/destroy-project.js",
     "dev": "ts-node src/main.ts",
     "test": "jest",
     "test:watch": "jest --watch",
