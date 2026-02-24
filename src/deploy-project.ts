@@ -1,5 +1,6 @@
 import { createTable, insertShipAttributes } from './deploy-dynamo';
 import { ApiGateway } from './apigateway';
+import { S3 } from './s3';
 
 
 async function deploy() {
@@ -33,7 +34,11 @@ async function deploy() {
     console.log(`🔗 Invoke URL: ${apiGateway.invokeUrl}`);
     console.log('Project deployed...');
 
+    const s3 = new S3();
+    s3.createBucket("test");
 
+    s3.createBucket("bucket");
+    s3.deleteBucket();
 
   } catch (error) {
     console.error('❌ Error:', error);
