@@ -1,94 +1,65 @@
 import {
-    CopyObjectCommand,
-    CopyObjectCommandInput,
+    BucketLocationConstraint,
     CreateBucketCommand,
-    CreateBucketCommandInput,
-    DeleteBucketCommand,
-    DeleteBucketCommandInput,
-    DeleteObjectCommand,
-    DeleteObjectCommandInput,
-    ListObjectsV2Command,
-    ListObjectsV2CommandInput,
+    HeadBucketCommand,
+    PutObjectCommand,
     S3Client,
-    S3ClientConfig
-} from "@aws-sdk/client-s3"
+} from '@aws-sdk/client-s3';
+import fs from 'node:fs';
+import path from 'node:path';
 
 class S3 {
-    config : S3ClientConfig = {};
-    client : S3Client = new S3Client(this.config);
-    name : string = "";
-    location : string = "";
+    private readonly client: S3Client;
+    private bucketName = '';
+    private readonly region: string;
 
-    async createBucket(name : string) {
-        this.name = name;
-
-        const input : CreateBucketCommandInput = {
-            Bucket: name
-        };
-        const command = new CreateBucketCommand(input);
-        const response = await this.client.send(command);
-
-        this.location = response.Location!;
-
-        return response;
+    constructor(region: string) {
+        this.region = region;
+        this.client = new S3Client({ region });
     }
 
-    async copyLocalFileToBucket(key : string) {
-        const input : CopyObjectCommandInput = {
-            Bucket: this.name,
-            CopySource: '.',
-            Key: key
-        };
-        const command = new CopyObjectCommand(input);
-        const response = await this.client.send(command);
-        
-        return response;
-    }
+    async ensureBucket(bucketName: string): Promise<void> {
+        this.bucketName = bucketName;
 
-    async copyBucketFileToLocal(key : string) {
-        const input : CopyObjectCommandInput = {
-            Bucket: this.name,
-            CopySource: '.',
-            Key: key
-        };
-        const command = new CopyObjectCommand(input);
-        const response = await this.client.send(command);
-
-        return response;
-    }
-
-    async deleteBucket() {
-        const input : DeleteBucketCommandInput = {
-            Bucket: this.name
-        };
-        const command = new DeleteBucketCommand(input);
-        const response = await this.client.send(command);
-
-        return response;
-    }
-    
-    async deleteFromBucket(key : string) {
-        const input : DeleteObjectCommandInput = {
-            Bucket: this.name,
-            Key: key
-        };
-        const command = new DeleteObjectCommand(input);
-        const response = await this.client.send(command);
-
-        return response;
-    }
-
-    async clearBucket() {
-        const input : ListObjectsV2CommandInput = {
-            Bucket: this.name
+        try {
+            await this.client.send(new HeadBucketCommand({ Bucket: bucketName }));
+            return;
+        } catch {
+            // Create the bucket if it does not exist
         }
-        const command = new ListObjectsV2Command(input);
-        const response = await this.client.send(command);
 
-        if (response.Contents !== undefined && response.Contents !== null) {
-            for (let object of response.Contents!) {
-                this.deleteFromBucket(object.Key!);
+        const createParams =
+            this.region === 'eu-west-1'
+                ? { Bucket: bucketName }
+                : {
+                        Bucket: bucketName,
+                        CreateBucketConfiguration: {
+                            LocationConstraint: this.region as BucketLocationConstraint,
+                        },
+                    };
+
+        await this.client.send(new CreateBucketCommand(createParams));
+    }
+
+    async uploadDirectory(directoryPath: string): Promise<void> {
+        const absolutePath = path.resolve(directoryPath);
+        const entries = fs.readdirSync(absolutePath, { withFileTypes: true });
+
+        for (const entry of entries) {
+            if (!entry.isFile()) {
+                continue;
             }
+
+            const filePath = path.join(absolutePath, entry.name);
+            const fileStream = fs.createReadStream(filePath);
+
+            await this.client.send(
+                new PutObjectCommand({
+                    Bucket: this.bucketName,
+                    Key: entry.name,
+                    Body: fileStream,
+                })
+            );
         }
     }
 }

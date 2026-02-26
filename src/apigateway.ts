@@ -3,9 +3,12 @@ import {
   CreateApiKeyCommand,
   CreateDeploymentCommand,
   CreateResourceCommand,
+  CreateUsagePlanCommand,
+  CreateUsagePlanKeyCommand,
   DeleteRestApiCommand,
   GetRestApisCommand,
   GetResourcesCommand,
+  PutGatewayResponseCommand,
   PutIntegrationResponseCommand,
   PutIntegrationCommand,
   PutMethodResponseCommand,
@@ -17,6 +20,7 @@ const REGION = process.env['AWS_REGION'] || 'eu-west-1';
 const API_NAME = 'shipwrecker-api';
 const STAGE_NAME = 'dev';
 const API_KEY_NAME = process.env['API_GATEWAY_API_KEY_NAME'] || 'shipwrecker-api-key';
+const USAGE_PLAN_NAME = process.env['API_GATEWAY_USAGE_PLAN_NAME'] || 'shipwrecker-usage-plan';
 
 const apiGatewayClient = new APIGatewayClient({ region: REGION });
 
@@ -141,6 +145,113 @@ class ApiGateway {
         resourceId,
         httpMethod: 'GET',
         statusCode: '200',
+        responseParameters: {
+          'method.response.header.Access-Control-Allow-Origin': "'*'",
+        },
+      })
+    );
+
+    await apiGatewayClient.send(
+      new PutMethodResponseCommand({
+        restApiId,
+        resourceId,
+        httpMethod: 'GET',
+        statusCode: '403',
+        responseParameters: {
+          'method.response.header.Access-Control-Allow-Origin': true,
+        },
+      })
+    );
+
+    await apiGatewayClient.send(
+      new PutIntegrationResponseCommand({
+        restApiId,
+        resourceId,
+        httpMethod: 'GET',
+        statusCode: '403',
+        selectionPattern: '403',
+        responseParameters: {
+          'method.response.header.Access-Control-Allow-Origin': "'*'",
+        },
+      })
+    );
+  }
+
+  static async addGetMethodWithS3ListIntegration(
+    restApiId: string,
+    resourceId: string
+  ): Promise<void> {
+    const dependencies = ApiGateway.getDependencies();
+
+    await apiGatewayClient.send(
+      new PutMethodCommand({
+        restApiId,
+        resourceId,
+        httpMethod: 'GET',
+        authorizationType: 'NONE',
+        apiKeyRequired: true,
+      })
+    );
+
+    await apiGatewayClient.send(
+      new PutIntegrationCommand({
+        restApiId,
+        resourceId,
+        httpMethod: 'GET',
+        type: 'AWS',
+        integrationHttpMethod: 'GET',
+        credentials: dependencies.s3RoleArn,
+        uri: `arn:aws:apigateway:${REGION}:s3:path/{bucket}`,
+        requestParameters: {
+          'integration.request.path.bucket': `'${dependencies.s3BucketName}'`,
+          'integration.request.querystring.list-type': "'2'",
+        },
+      })
+    );
+
+    await apiGatewayClient.send(
+      new PutMethodResponseCommand({
+        restApiId,
+        resourceId,
+        httpMethod: 'GET',
+        statusCode: '200',
+        responseParameters: {
+          'method.response.header.Access-Control-Allow-Origin': true,
+        },
+      })
+    );
+
+    await apiGatewayClient.send(
+      new PutIntegrationResponseCommand({
+        restApiId,
+        resourceId,
+        httpMethod: 'GET',
+        statusCode: '200',
+        responseParameters: {
+          'method.response.header.Access-Control-Allow-Origin': "'*'",
+        },
+      })
+    );
+
+    await apiGatewayClient.send(
+      new PutMethodResponseCommand({
+        restApiId,
+        resourceId,
+        httpMethod: 'GET',
+        statusCode: '403',
+        responseParameters: {
+          'method.response.header.Access-Control-Allow-Origin': true,
+        },
+      })
+    );
+
+    await apiGatewayClient.send(
+      new PutIntegrationResponseCommand({
+        restApiId,
+        resourceId,
+        httpMethod: 'GET',
+        statusCode: '403',
+        selectionPattern: '403',
         responseParameters: {
           'method.response.header.Access-Control-Allow-Origin': "'*'",
         },
@@ -326,8 +437,8 @@ class ApiGateway {
     );
   }
 
-  static async createApiToken(): Promise<string> {
-    const response = await apiGatewayClient.send(
+  static async createApiToken(restApiId: string): Promise<string> {
+    const apiKeyResponse = await apiGatewayClient.send(
       new CreateApiKeyCommand({
         name: API_KEY_NAME,
         enabled: true,
@@ -335,11 +446,35 @@ class ApiGateway {
       })
     );
 
-    if (!response.value) {
+    if (!apiKeyResponse.value || !apiKeyResponse.id) {
       throw new Error('Failed to create API token (API Key).');
     }
 
-    return response.value;
+    const usagePlanResponse = await apiGatewayClient.send(
+      new CreateUsagePlanCommand({
+        name: USAGE_PLAN_NAME,
+        apiStages: [
+          {
+            apiId: restApiId,
+            stage: STAGE_NAME,
+          },
+        ],
+      })
+    );
+
+    if (!usagePlanResponse.id) {
+      throw new Error('Failed to create API Gateway usage plan.');
+    }
+
+    await apiGatewayClient.send(
+      new CreateUsagePlanKeyCommand({
+        usagePlanId: usagePlanResponse.id,
+        keyId: apiKeyResponse.id,
+        keyType: 'API_KEY',
+      })
+    );
+
+    return apiKeyResponse.value;
   }
 
   static async setupApiGateway(): Promise<{ restApiId: string; invokeUrl: string; apiToken: string }> {
@@ -370,6 +505,30 @@ class ApiGateway {
     await ApiGateway.addGetMethodWithS3Integration(restApiId, photoKeyResourceId);
     await ApiGateway.addGetMethodWithDynamoGetItemIntegration(restApiId, profileKeyResourceId);
 
+    await apiGatewayClient.send(
+      new PutGatewayResponseCommand({
+        restApiId,
+        responseType: 'DEFAULT_4XX',
+        responseParameters: {
+          'gatewayresponse.header.Access-Control-Allow-Origin': "'*'",
+          'gatewayresponse.header.Access-Control-Allow-Headers': "'*'",
+          'gatewayresponse.header.Access-Control-Allow-Methods': "'GET,OPTIONS'",
+        },
+      })
+    );
+
+    await apiGatewayClient.send(
+      new PutGatewayResponseCommand({
+        restApiId,
+        responseType: 'DEFAULT_5XX',
+        responseParameters: {
+          'gatewayresponse.header.Access-Control-Allow-Origin': "'*'",
+          'gatewayresponse.header.Access-Control-Allow-Headers': "'*'",
+          'gatewayresponse.header.Access-Control-Allow-Methods': "'GET,OPTIONS'",
+        },
+      })
+    );
+
     await ApiGateway.addCorsOptionsMethod(restApiId, shipsResourceId);
     await ApiGateway.addCorsOptionsMethod(restApiId, photoKeyResourceId);
     await ApiGateway.addCorsOptionsMethod(restApiId, profileKeyResourceId);
@@ -382,7 +541,7 @@ class ApiGateway {
       })
     );
 
-    const apiToken = await ApiGateway.createApiToken();
+    const apiToken = await ApiGateway.createApiToken(restApiId);
 
     return {
       restApiId,

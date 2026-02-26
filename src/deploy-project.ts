@@ -1,17 +1,17 @@
 import { createTable, insertShipAttributes, showTables } from './deploy-dynamo';
 import { ApiGateway } from './apigateway';
 import { ensureApiGatewayExecutionRoles } from './iam-roles';
-import { DescribeTableCommand, DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { S3 } from './s3';
+import { DescribeTableCommand, DynamoDBClient } from '@aws-sdk/client-dynamodb';
 
 /* 
     Global for client
     WARNING : CLIENT REGION HARDCODED, TO BE PARAMETERIZED IN THE FUTURE
 */
-const client = new DynamoDBClient({ region: "eu-west-1" });
+const region = process.env['AWS_REGION'] || 'eu-west-1';
+const client = new DynamoDBClient({ region });
 
 /* Global for table name */
-const tableName: string = `ship_table`;
+const tableName: string = 'ship_table';
 
 /* Main function to execute deployment */
 async function deploy() {
@@ -50,7 +50,7 @@ async function deploy() {
 
     /* Configure API Gateway dependencies and setup API Gateway */
     ApiGateway.configureDependencies({
-      s3BucketName: process.env['S3_BUCKET_NAME'] || 'kfc-bucket',
+      s3BucketName: process.env['S3_BUCKET_NAME'] || `shipwrecker-${Date.now()}`,
       dynamoTableName: process.env['DYNAMODB_TABLE_NAME'] || 'ship_table',
       s3RoleArn: roles.s3RoleArn,
       dynamoRoleArn: roles.dynamoRoleArn,
@@ -65,15 +65,7 @@ async function deploy() {
     console.log(`🔗 Invoke URL: ${apiGateway.invokeUrl}`);
     console.log('Project deployed...');
 
-<<<<<<< HEAD
     showTables();
-=======
-    const s3 = new S3();
-    s3.createBucket("test");
-
-    s3.createBucket("bucket");
-    s3.deleteBucket();
->>>>>>> 3dd81ec3f9e1514e7d78299cc4b37c3ee0534b7b
 
   } catch (error) {
     console.error('❌ Error:', error);
@@ -82,4 +74,4 @@ async function deploy() {
 
 deploy();
 
-export { };
+export {};

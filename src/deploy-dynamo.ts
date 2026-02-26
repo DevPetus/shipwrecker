@@ -1,4 +1,4 @@
-import { CreateTableCommand, DynamoDBClient, DescribeTableCommand, ListTablesCommand } from "@aws-sdk/client-dynamodb";
+import { CreateTableCommand, DynamoDBClient, ListTablesCommand } from "@aws-sdk/client-dynamodb";
 import { PutCommand } from "@aws-sdk/lib-dynamodb";
 import * as ships from '../data/ships.json';
 
@@ -55,21 +55,6 @@ async function showTables() {
         const listTablesCommand = new ListTablesCommand({});
         const tables = await client.send(listTablesCommand);
         console.log('📋 Tables:', tables.TableNames);
-        /* Loop through tables and display their properties */
-        if (tables.TableNames) {
-            for (const table of tables.TableNames) {
-                /* Get table properties from name */
-                const describeTableCommand = new DescribeTableCommand({ TableName: table });
-                const describeResponse = await client.send(describeTableCommand);
-
-                console.log("id :", describeResponse.Table?.AttributeDefinitions?.find(attr => attr.AttributeName === "id")?.AttributeName);
-                console.log("nom :", describeResponse.Table?.AttributeDefinitions?.find(attr => attr.AttributeName === "nom")?.AttributeName);
-                console.log("type :", describeResponse.Table?.AttributeDefinitions?.find(attr => attr.AttributeName === "type")?.AttributeName);
-                console.log("pavillon :", describeResponse.Table?.AttributeDefinitions?.find(attr => attr.AttributeName === "pavillon")?.AttributeName);
-                console.log("taille :", describeResponse.Table?.AttributeDefinitions?.find(attr => attr.AttributeName === "taille")?.AttributeName);
-                console.log("nombre_marins :", describeResponse.Table?.AttributeDefinitions?.find(attr => attr.AttributeName === "nombre_marins")?.AttributeName);
-            }
-        }
     } catch (error) {
         console.error('❌ Error listing tables:', error);
     }
